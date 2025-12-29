@@ -17,3 +17,13 @@ An autonomous AI agent designed to bridge the gap between code generation and ex
 1. Clone the repo.
 2. Add your API key to `.env`.
 3. Run `python main.py`.
+
+## 🛠️ Helper Tools
+
+This project includes a utility script to help you find available free models on OpenRouter:
+
+- **`utils/find_free.py`**: Run this script to get an up-to-date list of all models currently available for free on OpenRouter. This is useful for avoiding 429 (Rate Limit) errors by switching to less crowded models.
+
+### How to run the tool:
+```bash
+python utils/find_free.py

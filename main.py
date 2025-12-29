@@ -67,19 +67,22 @@ def run_generated_code(code_string):
 
 # --- التشغيل ---
 if __name__ == "__main__":
-    my_task = "Write a python script to calculate the factorial of 5 and print it."
+    my_task = """Your previous code failed to use a custom exception. Write a Python script that STRICTLY defines a custom class InsufficientFundsError(Exception). Create a BankAccount with 100 AED. Attempt to withdraw 150 AED. You MUST raise the custom exception and catch it in a try-except block to print 'Transaction Failed: Insufficient Funds'. DO NOT use generic print statements for errors."""
+    
     print(f"🚀 Starting OpenRouter Agent for task: {my_task}\n")
     
     code = generate_code_solution(my_task)
     
-    for i in range(3):
-        print(f"--- Attempt {i+1} ---")
-        success, output = run_generated_code(code)
+    if code.startswith("#"):
+        print(f"❌ Error: {code}")
+    else:
+        # --- السطر الجديد الذي أضفناه هنا لرؤية الكود ---
+        print("🔍 Generated Code by AI:")
+        print("-" * 30)
+        print(code)
+        print("-" * 30)
         
+        # حلقة التشغيل والتصحيح (كما هي)
+        success, output = run_generated_code(code)
         if success:
             print(f"✅ Success! Output: {output.strip()}")
-            break
-        else:
-            print(f"❌ Error: {output.strip()}")
-            print("🔄 Agent is rethinking...")
-            code = generate_code_solution(my_task, previous_error=output)
