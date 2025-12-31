@@ -1,0 +1,7 @@
+[2025-12-31 08:19:31] STATUS: SUCCESS
+Task: Write a Python script that STRICTLY defines a custom class InsufficientFundsError(Exception). 
+    Create a BankAccount with 100 AED. Attempt to withdraw 150 AED. 
+    You MUST raise the custom exception and catch it to print 'Transaction Failed: Insufficient Funds'.
+Attempts: 3
+Final Result: Transaction Failed: Insufficient Funds
+--------------------------------------------------

@@ -1,88 +1,96 @@
 import os
 import subprocess
-import time
-from openai import OpenAI
+import datetime
 from dotenv import load_dotenv
+from openai import OpenAI
 
-# 1. إعداد الاتصال بـ OpenRouter
+# إعداد مفاتيح البيئة
 load_dotenv()
-api_key = os.getenv("OPENROUTER_API_KEY")
-
-if not api_key:
-    raise ValueError("OPENROUTER_API_KEY not found in .env file")
-
-# OpenRouter متوافق تماماً مع مكتبة OpenAI
 client = OpenAI(
-  base_url="https://openrouter.ai/api/v1",
-  api_key=api_key,
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY"),
 )
 
-# 2. دالة توليد الكود
-def generate_code_solution(task_description, previous_error=None):
+def log_audit(task, attempts, success, final_output):
+    """حفظ سجل تدقيق للعمليات لضمان المراقبة والحوكمة."""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    status = "SUCCESS" if success else "FAILED"
     
-    system_prompt = "You are an expert Python programmer. Return ONLY raw Python code. No markdown. No explanations."
+    log_entry = (
+        f"[{timestamp}] STATUS: {status}\n"
+        f"Task: {task}\n"
+        f"Attempts: {attempts}\n"
+        f"Final Result: {final_output}\n"
+        f"{'-'*50}\n"
+    )
     
-    # سنطلب من الموديل التفكير خطوة بخطوة كما في تقنيات 2025
-    user_content = f"Task: {task_description}"
+    with open("audit_log.txt", "a", encoding="utf-8") as f:
+        f.write(log_entry)
+    print(f"\n📝 Audit log updated: audit_log.txt")
+
+def generate_code_solution(task, previous_error=None):
+    """توليد الكود باستخدام نماذج التفكير (Reasoning Models)."""
+    system_prompt = "You are an expert Python developer. Output ONLY clean Python code without markdown blocks."
+    user_content = task
+    
     if previous_error:
-        user_content += f"\n\nFix this error and return only the corrected code:\n{previous_error}"
+        user_content = f"Your previous code failed with this error: {previous_error}. Please think step-by-step and fix it.\nTask: {task}"
 
-    try:
-        response = client.chat.completions.create(
-            # استخدمنا موديل مجاني ومستقر جداً
-            model="meta-llama/llama-3.3-70b-instruct:free",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ]
-        )
-        
-        code = response.choices[0].message.content
-        # تنظيف الكود من أي علامات تنسيق زائدة
-        code = code.replace("```python", "").replace("```", "").strip()
-        return code
-        
-    except Exception as e:
-        return f"# API Error: {str(e)}"
+    response = client.chat.completions.create(
+        model="meta-llama/llama-3.3-70b-instruct:free", # الموديل الذي نجحنا باستخدامه
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+    )
+    return response.choices[0].message.content.strip()
 
-# 3. دالة تشغيل الكود
-def run_generated_code(code_string):
-    if code_string.startswith("# API Error"):
-        return False, code_string
-
-    filename = "temp_solution.py"
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(code_string)
+def run_generated_code(code):
+    """تشغيل الكود في بيئة معزولة (Sandbox) والتقاط النتائج."""
+    with open("temp_solution.py", "w", encoding="utf-8") as f:
+        f.write(code)
     
     try:
         result = subprocess.run(
-            ["python", filename], 
-            capture_output=True, 
-            text=True, 
-            timeout=5 
+            ["python", "temp_solution.py"],
+            capture_output=True, text=True, timeout=10
         )
-        return (result.returncode == 0, result.stdout if result.returncode == 0 else result.stderr)
+        if result.returncode == 0:
+            return True, result.stdout
+        else:
+            return False, result.stderr
     except Exception as e:
         return False, str(e)
 
-# --- التشغيل ---
 if __name__ == "__main__":
-    my_task = """Your previous code failed to use a custom exception. Write a Python script that STRICTLY defines a custom class InsufficientFundsError(Exception). Create a BankAccount with 100 AED. Attempt to withdraw 150 AED. You MUST raise the custom exception and catch it in a try-except block to print 'Transaction Failed: Insufficient Funds'. DO NOT use generic print statements for errors."""
+    # المهمة الصعبة لاختبار الـ Custom Exceptions
+    my_task = """Write a Python script that STRICTLY defines a custom class InsufficientFundsError(Exception). 
+    Create a BankAccount with 100 AED. Attempt to withdraw 150 AED. 
+    You MUST raise the custom exception and catch it to print 'Transaction Failed: Insufficient Funds'."""
     
-    print(f"🚀 Starting OpenRouter Agent for task: {my_task}\n")
+    print(f"🚀 Starting AI Agent...")
     
-    code = generate_code_solution(my_task)
-    
-    if code.startswith("#"):
-        print(f"❌ Error: {code}")
-    else:
-        # --- السطر الجديد الذي أضفناه هنا لرؤية الكود ---
-        print("🔍 Generated Code by AI:")
-        print("-" * 30)
-        print(code)
-        print("-" * 30)
+    max_attempts = 3
+    attempt = 1
+    success = False
+    last_error = None
+
+    while attempt <= max_attempts:
+        print(f"\n--- Attempt {attempt} ---")
+        code = generate_code_solution(my_task, last_error)
         
-        # حلقة التشغيل والتصحيح (كما هي)
+        print("🔍 Analyzing & Executing...")
         success, output = run_generated_code(code)
+        
         if success:
             print(f"✅ Success! Output: {output.strip()}")
+            log_audit(my_task, attempt, True, output.strip())
+            break
+        else:
+            print(f"❌ Error detected. Agent is rethinking...")
+            last_error = output
+            attempt += 1
+
+    if not success:
+        print("🛑 Failed after maximum attempts.")
+        log_audit(my_task, max_attempts, False, "Max attempts reached.")
